@@ -182,7 +182,7 @@ def multi_file_cards_dir(tmp_path: Path) -> Path:
           scenes.yaml
             シーンまとめ:
               - __cards/SAO/CH_asada/朝田詩乃__
-              # - __cards/BA/CH_shiroko/シロコ__
+              - __cards/BA/CH_shiroko/シロコ__
 
             デフォルト:
               - default lighting
@@ -235,7 +235,7 @@ def multi_file_cards_dir(tmp_path: Path) -> Path:
         (
             "シーンまとめ:\n"
             "  - __cards/SAO/CH_asada/朝田詩乃__\n"
-            "  # - __cards/BA/CH_shiroko/シロコ__\n"
+            "  - __cards/BA/CH_shiroko/シロコ__\n"
             "\n"
             "デフォルト:\n"
             "  - default lighting\n"
@@ -407,8 +407,78 @@ def diamond_ref_cards_dir(tmp_path: Path) -> Path:
 
 
 # ---------------------------------------------------------------------------
+# コメントアウト参照テスト用フィクスチャ
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture()
+def commented_ref_cards_dir(tmp_path: Path) -> Path:
+    """コメントアウトされた参照を含むカードディレクトリ。
+
+    ``シーンまとめ`` は2つの参照を持つが、シロコへの参照は
+    コメントアウトされているためスキップされるべき。
+
+    Structure::
+
+        cards/
+          scenes.yaml
+            シーンまとめ:
+              - __朝田詩乃__
+              # - __シロコ__  <- コメントアウト
+
+            朝田詩乃:
+              - slender body
+
+            シロコ:
+              - athletic body
+    """
+    cards_dir = tmp_path / "cards"
+
+    _write_yaml(
+        cards_dir / "scenes.yaml",
+        (
+            "シーンまとめ:\n"
+            "  - __朝田詩乃__\n"
+            "  # - __シロコ__\n"
+            "\n"
+            "朝田詩乃:\n"
+            "  - slender body\n"
+            "\n"
+            "シロコ:\n"
+            "  - athletic body\n"
+        ),
+    )
+
+    return cards_dir
+
+
+# ---------------------------------------------------------------------------
 # W2: Broken (unresolved) reference fixtures
 # ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# W3: Search feature fixtures
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture()
+def wildtree_main_window_with_multi_data(qapp, multi_file_cards_dir: Path):
+    """Create a MainWindow instance loaded with the multi_file_cards_dir data.
+
+    Provides a window with a resolver and tree already populated.
+    Useful for search tests that need multiple nodes to match against.
+
+    The multi_file_cards_dir contains keys:
+        メイン, シーンまとめ, デフォルト,
+        朝田詩乃, 朝田詩乃体格, 朝田詩乃髪型,
+        エイジスライダー, シロコ, シロコ体格
+    """
+    from gui.main_window import MainWindow
+
+    window = MainWindow(cards_dir=multi_file_cards_dir)
+    yield window
+    window.close()
 
 
 @pytest.fixture()

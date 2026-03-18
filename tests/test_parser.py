@@ -749,16 +749,16 @@ class TestBuildTree:
                 assert shared_nodes[0].is_leaf is True
 
     def test_ツリー構築_コメントアウトされた参照はスキップ(
-        self, multi_file_cards_dir: Path
+        self, commented_ref_cards_dir: Path
     ):
         """Commented-out references in values are not in the tree.
 
         scenes.yaml has:
           シーンまとめ:
-            - __cards/SAO/CH_asada/朝田詩乃__
-            # - __cards/BA/CH_shiroko/シロコ__  <- commented out
+            - __朝田詩乃__
+            # - __シロコ__  <- commented out
         """
-        resolver = self._make_resolver_from_dir(multi_file_cards_dir)
+        resolver = self._make_resolver_from_dir(commented_ref_cards_dir)
         tree = build_tree("シーンまとめ", resolver)
         child_names = [c.name for c in tree.children]
         # シロコ should NOT be in the tree (commented out)

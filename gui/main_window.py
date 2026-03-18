@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QMainWindow,
     QPushButton,
     QSplitter,
@@ -43,6 +44,7 @@ class MainWindow(QMainWindow):
         +---------------------------------------------------+
         | cards: [path display] [Browse...]                  |
         | [entry point selector] v  [Refresh]                |
+        | [search box] [<prev] [next>] [match count label]   |
         +---------------------------------------------------+
         | QTreeWidget      |  QTextEdit (read-only)         |
         | (dependency tree) |  (key definition values)       |
@@ -65,6 +67,13 @@ class MainWindow(QMainWindow):
         _label_path: QLabel showing the current cards directory path.
         _btn_browse: QPushButton to open folder selection dialog.
         _btn_refresh: QPushButton to re-scan YAML files and rebuild tree.
+        _search_edit: QLineEdit for entering search text.
+        _btn_search_prev: QPushButton to navigate to previous match.
+        _btn_search_next: QPushButton to navigate to next match.
+        _search_count_label: QLabel showing match count (e.g. "1/3").
+        _search_matches: List of QTreeWidgetItems matching the search.
+        _search_index: Current index in _search_matches (-1 = no match).
+        _search_text: Current search text (synced in _on_search_text_changed).
     """
 
     WINDOW_TITLE: str = "WildTree"
@@ -109,6 +118,7 @@ class MainWindow(QMainWindow):
         Called once during __init__. Creates the layout hierarchy:
         - Top bar: cards path label + Browse button
         - Middle bar: entry point combo + Refresh button
+        - Search bar: search text input + prev/next buttons + match count
         - Main area: QSplitter with QTreeWidget (left) and QTextEdit (right)
         """
         self.setWindowTitle(self.WINDOW_TITLE)
@@ -142,6 +152,24 @@ class MainWindow(QMainWindow):
         mid_bar.addWidget(self._btn_refresh)
         main_layout.addLayout(mid_bar)
 
+        # --- 検索バー: 検索テキスト + 前へ/次へボタン + マッチ件数 ---
+        search_bar = QHBoxLayout()
+        self._search_edit = QLineEdit()
+        self._search_edit.setPlaceholderText("検索...")
+        search_bar.addWidget(self._search_edit, stretch=1)
+        self._btn_search_prev = QPushButton("<")
+        search_bar.addWidget(self._btn_search_prev)
+        self._btn_search_next = QPushButton(">")
+        search_bar.addWidget(self._btn_search_next)
+        self._search_count_label = QLabel("")
+        search_bar.addWidget(self._search_count_label)
+        main_layout.addLayout(search_bar)
+
+        # 検索状態の初期化
+        self._search_matches: list[QTreeWidgetItem] = []
+        self._search_index: int = -1
+        self._search_text: str = ""
+
         # --- メインエリア: QSplitter (左: ツリー, 右: キー定義) ---
         self._splitter = QSplitter(Qt.Orientation.Horizontal)
 
@@ -166,11 +194,17 @@ class MainWindow(QMainWindow):
         - _btn_refresh.clicked -> _on_refresh
         - _combo_entry.currentTextChanged -> _on_entry_changed
         - _tree_widget.currentItemChanged -> _on_tree_item_selected
+        - _search_edit.textChanged -> _on_search_text_changed
+        - _btn_search_next.clicked -> _on_search_next
+        - _btn_search_prev.clicked -> _on_search_prev
         """
         self._btn_browse.clicked.connect(self._on_browse)
         self._btn_refresh.clicked.connect(self._on_refresh)
         self._combo_entry.currentTextChanged.connect(self._on_entry_changed)
         self._tree_widget.currentItemChanged.connect(self._on_tree_item_selected)
+        self._search_edit.textChanged.connect(self._on_search_text_changed)
+        self._btn_search_next.clicked.connect(self._on_search_next)
+        self._btn_search_prev.clicked.connect(self._on_search_prev)
 
     def _on_browse(self) -> None:
         """Handle Browse button click.
@@ -334,7 +368,9 @@ class MainWindow(QMainWindow):
         """Build tree from entry key and display in QTreeWidget.
 
         Clears the existing tree widget, calls build_tree() from
-        the core module, and populates the QTreeWidget.
+        the core module, and populates the QTreeWidget. Also clears
+        the search state (match list, index, label) and re-runs the
+        search if search text is present in _search_edit.
 
         Args:
             entry_key: The key name to use as tree root.
@@ -344,6 +380,15 @@ class MainWindow(QMainWindow):
 
         self._tree_widget.clear()
         self._text_detail.setPlainText(self.DETAIL_PLACEHOLDER)
+
+        # 検索状態をクリア（古い QTreeWidgetItem 参照を無効化）
+        # _search_text はここでクリアするが、_search_edit のテキストはユーザー入力を保持する。
+        # 再検索は下部で _search_edit.text() から判定し、
+        # _on_search_text_changed() 経由で _search_text が再同期される。
+        self._search_matches = []
+        self._search_index = -1
+        self._search_text = ""
+        self._search_count_label.setText("")
 
         tree = build_tree(entry_key, self._resolver)
 
@@ -365,6 +410,11 @@ class MainWindow(QMainWindow):
 
         # ルートを展開
         root_item.setExpanded(True)
+
+        # 検索テキストが残っている場合は新しいツリーに対して再検索
+        search_text = self._search_edit.text()
+        if search_text:
+            self._on_search_text_changed(search_text)
 
     def _populate_tree_item(
         self,
@@ -393,3 +443,114 @@ class MainWindow(QMainWindow):
                 child_item.setForeground(0, QBrush(self.UNRESOLVED_COLOR))
             # 子ノードを再帰的に追加
             self._populate_tree_item(child_item, child)
+
+    # ------------------------------------------------------------------
+    # 検索機能 (W3)
+    # ------------------------------------------------------------------
+
+    def _on_search_text_changed(self, text: str) -> None:
+        """Handle search text change.
+
+        Performs a partial-match, case-insensitive, recursive search
+        on the QTreeWidget using findItems(). Updates the match list
+        and navigates to the first match.
+
+        If text is empty, clears the search state without changing
+        the current tree selection.
+
+        Args:
+            text: The current search text from _search_edit.
+        """
+        # 検索テキストを内部状態に保存（直接呼び出し時にも正しくラベル更新するため）
+        self._search_text = text
+
+        if not text:
+            self._search_matches = []
+            self._search_index = -1
+            self._update_search_count_label()
+            return
+
+        # 部分一致 + 再帰 + case-insensitive で検索
+        flags = Qt.MatchFlag.MatchContains | Qt.MatchFlag.MatchRecursive
+        self._search_matches = self._tree_widget.findItems(text, flags, 0)
+        if len(self._search_matches) > 0:
+            self._search_index = 0
+            self._navigate_to_match(self._search_index)
+        else:
+            self._search_index = -1
+        self._update_search_count_label()
+
+    def _on_search_next(self) -> None:
+        """Navigate to the next search match.
+
+        Advances _search_index by 1 with wrap-around (last -> first).
+        Does nothing if there are no matches (防御コード: マッチ 0 件の
+        状態でボタンが押されるケース)。
+        """
+        if len(self._search_matches) == 0:
+            return
+        self._search_index = (self._search_index + 1) % len(self._search_matches)
+        self._navigate_to_match(self._search_index)
+        self._update_search_count_label()
+
+    def _on_search_prev(self) -> None:
+        """Navigate to the previous search match.
+
+        Decrements _search_index by 1 with wrap-around (first -> last).
+        Does nothing if there are no matches (防御コード: マッチ 0 件の
+        状態でボタンが押されるケース)。
+        """
+        if len(self._search_matches) == 0:
+            return
+        self._search_index = (self._search_index - 1) % len(self._search_matches)
+        self._navigate_to_match(self._search_index)
+        self._update_search_count_label()
+
+    def _navigate_to_match(self, index: int) -> None:
+        """Select and scroll to the match at the given index.
+
+        Expands all ancestor nodes of the match item to ensure
+        visibility, then sets it as the current item and scrolls to it.
+        setCurrentItem triggers the existing currentItemChanged signal,
+        which updates the right pane via _on_tree_item_selected.
+
+        Args:
+            index: Index into _search_matches to navigate to.
+        """
+        # 防御コード: 範囲外のインデックスが渡された場合は何もしない
+        if index < 0 or index >= len(self._search_matches):
+            return
+
+        match_item = self._search_matches[index]
+
+        # マッチノードの全祖先を展開して可視性を確保
+        parent = match_item.parent()
+        while parent is not None:
+            parent.setExpanded(True)
+            parent = parent.parent()
+
+        self._tree_widget.setCurrentItem(match_item)
+        self._tree_widget.scrollToItem(match_item)
+
+    def _update_search_count_label(self) -> None:
+        """Update the match count label based on current search state.
+
+        Display format:
+        - Matches exist: "N/M" (1-based current / total)
+        - No matches (search text present): "0/0"
+        - Search text empty: "" (empty string)
+        """
+        # _search_edit.text() ではなく内部状態 _search_text を参照する。
+        # テストで _on_search_text_changed() を直接呼んだ場合でも正しく動作する。
+        if not self._search_text:
+            self._search_count_label.setText("")
+            return
+
+        total = len(self._search_matches)
+        if total == 0:
+            self._search_count_label.setText("0/0")
+            return
+
+        # 1-based 表示: _search_index は 0-based なので +1
+        current_display = self._search_index + 1
+        self._search_count_label.setText(f"{current_display}/{total}")
