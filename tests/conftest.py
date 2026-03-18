@@ -481,6 +481,83 @@ def wildtree_main_window_with_multi_data(qapp, multi_file_cards_dir: Path):
     window.close()
 
 
+# ---------------------------------------------------------------------------
+# S2: スキャナ + パーサー テスト用フィクスチャ
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture()
+def commented_values_yaml(tmp_path: Path) -> Path:
+    """コメント行を含む YAML ファイル。
+
+    値行コメントとセクション区切りの混在テスト用。
+
+    Structure::
+
+        key:
+          - __active_ref__
+          # - __commented_ref__       <- 値行コメント (is_commented=True)
+          # ---- セクション区切り ----  <- スキップ
+          - __another_ref__
+    """
+    path = tmp_path / "commented.yaml"
+    _write_yaml(
+        path,
+        (
+            "key:\n"
+            "  - __active_ref__\n"
+            "  # - __commented_ref__\n"
+            "  # ---- セクション区切り ----\n"
+            "  - __another_ref__\n"
+        ),
+    )
+    return path
+
+
+@pytest.fixture()
+def empty_def_yaml(tmp_path: Path) -> Path:
+    """空定義 '"{}"' を含む YAML ファイル。
+
+    Structure::
+
+        key:
+          - "{}"
+          - normal_value
+    """
+    path = tmp_path / "empty_def.yaml"
+    _write_yaml(
+        path,
+        (
+            'key:\n'
+            '  - "{}"\n'
+            '  - normal_value\n'
+        ),
+    )
+    return path
+
+
+@pytest.fixture()
+def dynamic_ref_yaml(tmp_path: Path) -> Path:
+    """動的参照を含む YAML ファイル。
+
+    Structure::
+
+        key:
+          - __{__cards/options/variable__}suffix__
+          - __normal_ref__
+    """
+    path = tmp_path / "dynamic_ref.yaml"
+    _write_yaml(
+        path,
+        (
+            "key:\n"
+            "  - __{__cards/options/variable__}suffix__\n"
+            "  - __normal_ref__\n"
+        ),
+    )
+    return path
+
+
 @pytest.fixture()
 def broken_ref_cards_dir(tmp_path: Path) -> Path:
     """A cards directory containing broken (unresolved) references.
