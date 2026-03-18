@@ -673,10 +673,14 @@ class TestBuildTree:
         assert len(circular_nodes) == 1
         assert circular_nodes[0].name == "alpha"
 
-    def test_ツリー構築_未解決参照はツリーに含まれない(
+    def test_ツリー構築_未解決参照はツリーに含まれis_unresolvedがTrue(
         self, tmp_path: Path, yaml_factory
     ):
-        """Unresolved references are not included in the tree."""
+        """Unresolved references are included in the tree with is_unresolved=True.
+
+        W2: Previously unresolved references were excluded (skipped).
+        Now they are included as TreeNode(is_unresolved=True, is_leaf=True).
+        """
         cards_dir = tmp_path / "cards"
         yaml_factory(
             "cards/test.yaml",
@@ -689,10 +693,16 @@ class TestBuildTree:
         )
         resolver = self._make_resolver_from_dir(cards_dir)
         tree = build_tree("entry", resolver)
-        # Only "existing_key" should appear; "non_existent_key" is unresolved
         child_names = [c.name for c in tree.children]
+        # Both resolved and unresolved references appear in the tree
         assert "existing_key" in child_names
-        assert "non_existent_key" not in child_names
+        assert "non_existent_key" in child_names
+        # The unresolved reference has is_unresolved=True
+        unresolved = [c for c in tree.children if c.name == "non_existent_key"]
+        assert len(unresolved) == 1
+        assert unresolved[0].is_unresolved is True
+        assert unresolved[0].is_leaf is True
+        assert unresolved[0].children == []
 
     def test_ツリー構築_深い依存チェーン(
         self, multi_file_cards_dir: Path

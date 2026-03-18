@@ -404,3 +404,126 @@ def diamond_ref_cards_dir(tmp_path: Path) -> Path:
         ),
     )
     return cards_dir
+
+
+# ---------------------------------------------------------------------------
+# W2: Broken (unresolved) reference fixtures
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture()
+def broken_ref_cards_dir(tmp_path: Path) -> Path:
+    """A cards directory containing broken (unresolved) references.
+
+    ``entry`` has two references: ``existing_key`` (resolvable) and
+    ``non_existent_key`` (unresolvable / broken).
+
+    Structure::
+
+        cards/
+          test.yaml
+            entry:
+              - __existing_key__
+              - __non_existent_key__
+
+            existing_key:
+              - leaf value
+    """
+    cards_dir = tmp_path / "cards"
+    _write_yaml(
+        cards_dir / "test.yaml",
+        (
+            "entry:\n"
+            "  - __existing_key__\n"
+            "  - __non_existent_key__\n"
+            "\n"
+            "existing_key:\n"
+            "  - leaf value\n"
+        ),
+    )
+    return cards_dir
+
+
+@pytest.fixture()
+def broken_ref_fullpath_cards_dir(tmp_path: Path) -> Path:
+    """A cards directory with a broken full-path reference.
+
+    ``entry`` references ``__cards/SAO/CH_asada/unknown_key__`` which
+    cannot be resolved. The display name should be ``unknown_key``
+    (last segment after slash).
+
+    Structure::
+
+        cards/
+          test.yaml
+            entry:
+              - __cards/SAO/CH_asada/unknown_key__
+    """
+    cards_dir = tmp_path / "cards"
+    _write_yaml(
+        cards_dir / "test.yaml",
+        (
+            "entry:\n"
+            "  - __cards/SAO/CH_asada/unknown_key__\n"
+        ),
+    )
+    return cards_dir
+
+
+@pytest.fixture()
+def all_broken_ref_cards_dir(tmp_path: Path) -> Path:
+    """A cards directory where all references are broken.
+
+    ``entry`` has two references, both pointing to non-existent keys.
+
+    Structure::
+
+        cards/
+          test.yaml
+            entry:
+              - __broken_ref_1__
+              - __broken_ref_2__
+    """
+    cards_dir = tmp_path / "cards"
+    _write_yaml(
+        cards_dir / "test.yaml",
+        (
+            "entry:\n"
+            "  - __broken_ref_1__\n"
+            "  - __broken_ref_2__\n"
+        ),
+    )
+    return cards_dir
+
+
+@pytest.fixture()
+def broken_and_circular_cards_dir(tmp_path: Path) -> Path:
+    """A cards directory with both broken and circular references.
+
+    ``parent`` references ``child_circular`` (which references back
+    to ``parent``, creating a cycle) and ``broken_ref`` (non-existent).
+
+    Structure::
+
+        cards/
+          test.yaml
+            parent:
+              - __child_circular__
+              - __broken_ref__
+
+            child_circular:
+              - __parent__
+    """
+    cards_dir = tmp_path / "cards"
+    _write_yaml(
+        cards_dir / "test.yaml",
+        (
+            "parent:\n"
+            "  - __child_circular__\n"
+            "  - __broken_ref__\n"
+            "\n"
+            "child_circular:\n"
+            "  - __parent__\n"
+        ),
+    )
+    return cards_dir

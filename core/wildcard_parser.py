@@ -66,6 +66,9 @@ class TreeNode:
             OR if the reference could not be resolved.
         is_circular: True if this node was cut off due to circular reference
             detection.
+        is_unresolved: True if this node's reference could not be resolved
+            (resolve() returned None). These nodes have no children and
+            are displayed with a red highlight in the GUI.
     """
 
     name: str
@@ -73,6 +76,7 @@ class TreeNode:
     children: list[TreeNode] = field(default_factory=list)
     is_leaf: bool = False
     is_circular: bool = False
+    is_unresolved: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -507,9 +511,9 @@ def build_tree(
     marked with is_circular=True.
 
     References that cannot be resolved (no matching KeyDefinition)
-    are excluded from the tree (not shown as nodes). This matches
-    the design decision to not display literal/unresolved values
-    in the initial release.
+    are included in the tree as nodes with is_unresolved=True and
+    is_leaf=True. These nodes are displayed with a red highlight
+    in the GUI to indicate broken references.
 
     Args:
         entry_key: Name of the key to use as tree root.
@@ -557,8 +561,16 @@ def build_tree(
         children: list[TreeNode] = []
         for ref in refs:
             child_key_def = resolver.resolve(ref.name)
-            # 解決できない参照はツリーに含めない
             if child_key_def is None:
+                # 壊れた参照: ツリーに含め、is_unresolved=True にする
+                # 表示名は ref.name の最後のスラッシュ以降
+                child_display = ref.name.rsplit("/", 1)[-1]
+                children.append(TreeNode(
+                    name=child_display,
+                    ref_name=ref.name,
+                    is_leaf=True,
+                    is_unresolved=True,
+                ))
                 continue
             child_node = _build_node(
                 ref_name=ref.name,

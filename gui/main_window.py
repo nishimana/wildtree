@@ -9,6 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QBrush, QColor
 from PySide6.QtWidgets import (
     QComboBox,
     QFileDialog,
@@ -70,6 +71,7 @@ class MainWindow(QMainWindow):
     DEFAULT_WIDTH: int = 1000
     DEFAULT_HEIGHT: int = 800
     CIRCULAR_REF_LABEL: str = "(circular ref)"
+    UNRESOLVED_COLOR: QColor = QColor("red")
     SPLITTER_LEFT_RATIO: int = 400
     SPLITTER_RIGHT_RATIO: int = 600
     DETAIL_PLACEHOLDER: str = "(ノードを選択するとキー定義を表示します)"
@@ -351,6 +353,10 @@ class MainWindow(QMainWindow):
             display_text = f"{tree.name} {self.CIRCULAR_REF_LABEL}"
 
         root_item = QTreeWidgetItem([display_text])
+        # 防御コード: ルートノードはエントリポイントのキー名から構築されるため、
+        # 設計上 is_unresolved=True になることはないが、念のためチェックする
+        if tree.is_unresolved:
+            root_item.setForeground(0, QBrush(self.UNRESOLVED_COLOR))
         root_item.setData(0, self.REF_NAME_ROLE, tree.ref_name)
         self._tree_widget.addTopLevelItem(root_item)
 
@@ -383,5 +389,7 @@ class MainWindow(QMainWindow):
 
             child_item = QTreeWidgetItem(parent, [display_text])
             child_item.setData(0, self.REF_NAME_ROLE, child.ref_name)
+            if child.is_unresolved:
+                child_item.setForeground(0, QBrush(self.UNRESOLVED_COLOR))
             # 子ノードを再帰的に追加
             self._populate_tree_item(child_item, child)
