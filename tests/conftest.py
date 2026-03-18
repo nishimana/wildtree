@@ -6,9 +6,63 @@ All YAML files are written with encoding="utf-8" explicitly (W1).
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
+
+
+# ---------------------------------------------------------------------------
+# QApplication fixture (session scope, offscreen)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="session")
+def qapp():
+    """Create a single QApplication instance for the entire test session.
+
+    Uses QT_QPA_PLATFORM=offscreen to avoid window display.
+    Returns the existing instance if one has already been created.
+    """
+    os.environ["QT_QPA_PLATFORM"] = "offscreen"
+    from PySide6.QtWidgets import QApplication
+
+    app = QApplication.instance()
+    if app is None:
+        app = QApplication(["wildtree-test"])
+    return app
+
+
+# ---------------------------------------------------------------------------
+# GUI window fixtures
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture()
+def wildtree_main_window(qapp):
+    """Create a MainWindow instance without loading a cards directory.
+
+    Requires the qapp fixture for QApplication initialization.
+    The window is created with no cards_dir (initial empty state).
+    """
+    from gui.main_window import MainWindow
+
+    window = MainWindow(cards_dir=None)
+    yield window
+    window.close()
+
+
+@pytest.fixture()
+def wildtree_main_window_with_data(qapp, simple_cards_dir: Path):
+    """Create a MainWindow instance loaded with the simple_cards_dir data.
+
+    Provides a window with a resolver and tree already populated.
+    """
+    from gui.main_window import MainWindow
+
+    window = MainWindow(cards_dir=simple_cards_dir)
+    yield window
+    window.close()
 
 
 # ---------------------------------------------------------------------------
