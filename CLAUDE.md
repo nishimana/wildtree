@@ -132,37 +132,16 @@ wildtree/
 
 ## ナレッジベース
 
-各サイクルで過去の知見を参照する。以下のファイルを読むこと：
+ナレッジは `~/.claude/knowledge/dev-cycle/` に蓄積される。
 
-- 汎用原則: `C:\Users\nishi\.claude\knowledge\dev-cycle\principles.md`（常に参照）
-- 技術固有:
-  - `C:\Users\nishi\.claude\knowledge\dev-cycle\python.md`
-  - `C:\Users\nishi\.claude\knowledge\dev-cycle\pyside6.md`
-  - `C:\Users\nishi\.claude\knowledge\dev-cycle\windows.md`
+- 汎用原則: `principles.md`
+- 技術固有: `python.md` / `pyside6.md` / `windows.md`
 
-### 読み込みルール（全エージェント共通）
+### 運用方針
 
-各ナレッジファイルの `###` 見出しには遭遇カウンター `(遭遇: N回)` が付いている。
-以下の閾値に従って読む範囲を決める：
-
-| 遭遇回数 | 読み方 |
-|---|---|
-| **3回以上** | 必ず目を通す |
-| **2回** | 今回の作業に関連しそうなら読む |
-| **1回** | 今回の機能に直接関係するセクションだけ読む |
-
-`summary.md` があれば、まずそれを読む（必須）。`summary.md` は `generate-summary.bat` で自動生成される。
-
-### エージェント別の読み込み対象
-
-`summary.md` はファイル別にセクション分けされている。各エージェントは自分に関係するセクションを読む。
-
-| エージェント | summary.md で読むセクション | 本文で読むファイル |
-|---|---|---|
-| **architect** | 全セクション | principles.md + 関連する技術ファイル |
-| **tester** | 関連する技術ファイルのセクション | 同左（「テスト」セクション中心） |
-| **implementer** | 関連する技術ファイルのセクション | 同左（全セクション） |
-| **reviewer** | principles.md のセクション | principles.md（サマリのみで十分） |
+- **設計・テスト・実装・レビュー時にはナレッジを読まない**。事前に「これに注意しろ」と伝えても行動は変わらない
+- **振り返り時（ステップ6）にのみ読み書きする**。今回の作業で得た知見をナレッジファイルに記録する
+- 蓄積されたナレッジは、指示の抽象度・手順・エージェント定義などの**仕組みの改善**に活用する
 
 ## コーディング規約
 
