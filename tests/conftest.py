@@ -8,8 +8,12 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
+
+if TYPE_CHECKING:
+    from core.models import FullPathIndex, KeyRegistry
 
 
 # ---------------------------------------------------------------------------
@@ -674,3 +678,130 @@ def broken_and_circular_cards_dir(tmp_path: Path) -> Path:
         ),
     )
     return cards_dir
+
+
+# ---------------------------------------------------------------------------
+# S3: Resolver テスト用フィクスチャ
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture()
+def sample_registry() -> KeyRegistry:
+    """resolve のユニットテスト用 KeyRegistry。
+
+    複数のキー定義を含み、フルパスインデックスとの組み合わせで
+    名前解決の基本パターンをテストする。
+
+    キー定義:
+      - "朝田詩乃": SAO/CH_asada/asada.yaml (行1)
+      - "朝田詩乃体格": SAO/CH_asada/asada.yaml (行5)
+      - "シロコ": BA/CH_shiroko/shiroko.yaml (行1)
+      - "メイン": main.yaml (行1)
+      - "エイジスライダー": SAO/options/options.yaml (行1)
+    """
+    from core.models import KeyDefinition, KeyRegistry
+
+    cards_base = Path("C:/cards")
+    registry: KeyRegistry = {
+        "朝田詩乃": [
+            KeyDefinition(
+                name="朝田詩乃",
+                file_path=cards_base / "SAO" / "CH_asada" / "asada.yaml",
+                line_number=1,
+            ),
+        ],
+        "朝田詩乃体格": [
+            KeyDefinition(
+                name="朝田詩乃体格",
+                file_path=cards_base / "SAO" / "CH_asada" / "asada.yaml",
+                line_number=5,
+            ),
+        ],
+        "シロコ": [
+            KeyDefinition(
+                name="シロコ",
+                file_path=cards_base / "BA" / "CH_shiroko" / "shiroko.yaml",
+                line_number=1,
+            ),
+        ],
+        "メイン": [
+            KeyDefinition(
+                name="メイン",
+                file_path=cards_base / "main.yaml",
+                line_number=1,
+            ),
+        ],
+        "エイジスライダー": [
+            KeyDefinition(
+                name="エイジスライダー",
+                file_path=cards_base / "SAO" / "options" / "options.yaml",
+                line_number=1,
+            ),
+        ],
+    }
+    return registry
+
+
+@pytest.fixture()
+def sample_full_path_index(sample_registry: KeyRegistry) -> FullPathIndex:
+    """事前構築済みのフルパスインデックス。
+
+    sample_registry に対応するフルパスインデックスを手動で構築する。
+    resolve のユニットテストで使用。
+
+    マッピング:
+      "SAO/CH_asada/朝田詩乃" → KeyDefinition(name="朝田詩乃", ...)
+      "SAO/CH_asada/朝田詩乃体格" → KeyDefinition(name="朝田詩乃体格", ...)
+      "BA/CH_shiroko/シロコ" → KeyDefinition(name="シロコ", ...)
+      "メイン" → KeyDefinition(name="メイン", ...)
+      "SAO/options/エイジスライダー" → KeyDefinition(name="エイジスライダー", ...)
+    """
+    from core.models import FullPathIndex
+
+    index: FullPathIndex = {}
+    for key_name, key_defs in sample_registry.items():
+        kd = key_defs[-1]  # 後勝ち
+        # file_path から cards_dir (C:/cards) の相対パスを計算
+        rel = kd.file_path.relative_to(Path("C:/cards"))
+        parent = rel.parent
+        if parent == Path("."):
+            full_path = kd.name
+        else:
+            full_path = parent.as_posix() + "/" + kd.name
+        index[full_path] = kd
+    return index
+
+
+@pytest.fixture()
+def duplicate_key_registry() -> KeyRegistry:
+    """重複キーを含む KeyRegistry。
+
+    find_duplicate_keys のテスト用。
+    "common_style" が file_a.yaml と file_b.yaml の両方に存在する。
+    "unique_key" は1ファイルのみ。
+    """
+    from core.models import KeyDefinition, KeyRegistry
+
+    cards_base = Path("C:/cards")
+    registry: KeyRegistry = {
+        "common_style": [
+            KeyDefinition(
+                name="common_style",
+                file_path=cards_base / "file_a.yaml",
+                line_number=1,
+            ),
+            KeyDefinition(
+                name="common_style",
+                file_path=cards_base / "file_b.yaml",
+                line_number=1,
+            ),
+        ],
+        "unique_key": [
+            KeyDefinition(
+                name="unique_key",
+                file_path=cards_base / "unique.yaml",
+                line_number=1,
+            ),
+        ],
+    }
+    return registry
