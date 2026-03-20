@@ -543,6 +543,13 @@ class WildTreeWindow(QMainWindow):
             if self._registry is not None:
                 refresh_registry(file_path, self._registry)
 
+            # フルパスインデックスを差分更新
+            from core.resolver import refresh_full_path_index
+            if self._full_path_index is not None and self._cards_dir is not None:
+                refresh_full_path_index(
+                    file_path, self._registry, self._full_path_index, self._cards_dir
+                )
+
             # ツリー再構築
             self._rebuild_tree()
 
@@ -560,10 +567,9 @@ class WildTreeWindow(QMainWindow):
     def _rebuild_tree(self) -> None:
         """ツリーを再構築する。
 
-        build_full_path_index → build_tree → populate_model のパイプラインを実行する。
-        refresh_registry は呼び出し元（_on_item_changed）が事前に呼ぶ。
+        build_tree → populate_model のパイプラインを実行する。
+        refresh_registry と refresh_full_path_index は呼び出し元が事前に呼ぶ。
         """
-        from core.resolver import build_full_path_index
         from core.tree_builder import build_tree
 
         from gui.tree_model import populate_model
@@ -583,14 +589,16 @@ class WildTreeWindow(QMainWindow):
         if top_info is None:
             return
 
-        # フルパスインデックスを再構築
-        self._full_path_index = build_full_path_index(
-            self._registry, self._cards_dir
-        )
+        # レジストリから最新の key_def を取得（stale 回避）
+        key_name = top_info.key_def.name
+        if key_name in self._registry:
+            current_key_def = self._registry[key_name][-1]  # 後勝ち
+        else:
+            return
 
         # ツリーを再構築
         tree_node = build_tree(
-            top_info.key_def, self._registry, self._full_path_index
+            current_key_def, self._registry, self._full_path_index
         )
 
         # モデルに投入（_is_populating ガードで itemChanged を無視）

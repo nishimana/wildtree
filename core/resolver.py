@@ -83,6 +83,50 @@ class UnresolvedRef:
 # ---------------------------------------------------------------------------
 
 
+def refresh_full_path_index(
+    file_path: Path,
+    registry: KeyRegistry,
+    full_path_index: FullPathIndex,
+    cards_dir: Path,
+) -> None:
+    """変更されたファイルの KeyDefinition 参照をフルパスインデックス内で更新する。
+
+    refresh_registry() でレジストリが更新された後に呼ぶ。
+    full_path_index 内の該当ファイルに由来するエントリを
+    新しい KeyDefinition オブジェクトに差し替える。
+
+    コメント切替ではキー名・ファイルパスは不変なので、
+    インデックスのキー（フルパス文字列）は変わらない。
+    値（KeyDefinition オブジェクト）のみが更新される。
+
+    Args:
+        file_path: 変更されたファイルのパス。
+        registry: 更新済みのキーレジストリ。
+        full_path_index: 更新対象のフルパスインデックス（in-place で変更）。
+        cards_dir: cards ディレクトリのルートパス。
+    """
+    # file_path から cards_dir の相対パスを計算（1回だけ）
+    try:
+        relative = file_path.relative_to(cards_dir)
+    except ValueError:
+        return
+
+    parent = relative.parent
+
+    target_path = file_path.resolve()
+
+    # registry から該当ファイルの新しい KeyDefinition を取得し、
+    # フルパスを計算してインデックスを上書き
+    for key_defs in registry.values():
+        for kd in key_defs:
+            if kd.file_path.resolve() == target_path:
+                if parent == Path("."):
+                    fp = kd.name
+                else:
+                    fp = parent.as_posix() + "/" + kd.name
+                full_path_index[fp] = kd
+
+
 def build_full_path_index(
     registry: KeyRegistry,
     cards_dir: Path,
