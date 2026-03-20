@@ -32,7 +32,8 @@ wildtree/
 │   ├── main_window.py      # v1 プロトタイプ メインウィンドウ
 │   ├── app.py              # v2 メインウィンドウ（3ペイン構成） (S6)
 │   ├── tree_model.py       # v2 TreeNode → QStandardItemModel 変換 (S6)
-│   └── detail_pane.py      # v2 詳細ペインのテキスト生成 (S6)
+│   ├── detail_pane.py      # v2 詳細ペインのテキスト生成 (S6)
+│   └── test_harness.py     # v2 GUIテストハーネス (S9)
 ├── tests/                  # テストコード
 ├── docs/
 │   ├── design/             # 設計ドキュメント

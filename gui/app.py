@@ -52,6 +52,7 @@ Attributes:
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
 from PySide6.QtCore import QModelIndex, Qt
@@ -311,13 +312,36 @@ class WildTreeWindow(QMainWindow):
             return
 
         try:
-            # S1-S4 パイプラインを順に実行
+            # S1-S4 パイプラインを順に実行（パフォーマンスログ付き）
+            t_start = time.perf_counter()
+
+            t0 = time.perf_counter()
             yaml_files = scan_yaml_files(self._cards_dir)
+            t_scan = time.perf_counter() - t0
+
+            t0 = time.perf_counter()
             self._registry = build_registry(yaml_files)
+            t_parse = time.perf_counter() - t0
+
+            t0 = time.perf_counter()
             self._full_path_index = build_full_path_index(
                 self._registry, self._cards_dir
             )
+            t_index = time.perf_counter() - t0
+
+            t0 = time.perf_counter()
             self._top_trees = find_top_trees(self._registry)
+            t_top = time.perf_counter() - t0
+
+            t_total = time.perf_counter() - t_start
+
+            # パフォーマンスログ出力
+            print(f"[perf] _load_cards_dir:")
+            print(f"[perf]   scan:       {t_scan:.3f}s ({len(yaml_files)} files)")
+            print(f"[perf]   parse:      {t_parse:.3f}s ({len(self._registry)} keys)")
+            print(f"[perf]   index:      {t_index:.3f}s")
+            print(f"[perf]   top_trees:  {t_top:.3f}s ({len(self._top_trees)} top trees)")
+            print(f"[perf]   total:      {t_total:.3f}s")
 
             # パイプライン成功後にパスラベルを更新
             self._label_path.setText(str(self._cards_dir))
@@ -378,21 +402,43 @@ class WildTreeWindow(QMainWindow):
         if top_info is None:
             return
 
-        # ツリーを構築
+        # ツリーを構築（パフォーマンスログ付き）
+        t_start = time.perf_counter()
+
+        t0 = time.perf_counter()
         tree_node = build_tree(
             top_info.key_def, self._registry, self._full_path_index
         )
+        t_build = time.perf_counter() - t0
+
+        # ノード数を計測（パフォーマンスログ用）
+        def _count_nodes(node) -> int:
+            return 1 + sum(_count_nodes(c) for c in node.children)
+        node_count = _count_nodes(tree_node)
 
         # モデルに投入（_is_populating ガードで itemChanged を無視）
+        t0 = time.perf_counter()
         self._is_populating = True
         try:
             populate_model(tree_node, self._tree_model)
         finally:
             self._is_populating = False
+        t_populate = time.perf_counter() - t0
 
         # ルートノードを展開
+        t0 = time.perf_counter()
         root_index = self._tree_model.index(0, 0)
         self._tree_view.expand(root_index)
+        t_expand = time.perf_counter() - t0
+
+        t_total = time.perf_counter() - t_start
+
+        # パフォーマンスログ出力
+        print(f'[perf] _on_top_tree_selected("{top_info.name}"):')
+        print(f"[perf]   build_tree:      {t_build:.3f}s ({node_count} nodes)")
+        print(f"[perf]   populate_model:  {t_populate:.3f}s")
+        print(f"[perf]   expand_root:     {t_expand:.3f}s")
+        print(f"[perf]   total:           {t_total:.3f}s")
 
         # 状態を更新
         self._current_tree = tree_node
