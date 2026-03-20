@@ -17,14 +17,14 @@ from pathlib import Path
 
 from PySide6.QtWidgets import QApplication
 
-from gui.main_window import MainWindow
+from gui.app import WildTreeWindow
 
 
 def main() -> None:
     """Application entry point.
 
     Parses the optional cards_dir argument from sys.argv,
-    creates QApplication and MainWindow, and starts the event loop.
+    creates QApplication and WildTreeWindow, and starts the event loop.
     """
     # オプションの cards_dir 引数を解析
     cards_dir: Path | None = None
@@ -32,7 +32,7 @@ def main() -> None:
         cards_dir = Path(sys.argv[1])
 
     app = QApplication([sys.argv[0]])
-    window = MainWindow(cards_dir=cards_dir)
+    window = WildTreeWindow(cards_dir=cards_dir)
     window.show()
     sys.exit(app.exec())
 
