@@ -20,9 +20,18 @@ wildtree/
 ├── main.py                 # エントリポイント
 ├── wildtree.pyw            # ダブルクリック起動用
 ├── core/
-│   └── wildcard_parser.py  # YAMLスキャン + キー抽出 + 参照解決 + ツリー構築
+│   ├── wildcard_parser.py  # v1 プロトタイプ（YAMLスキャン + キー抽出 + 参照解決 + ツリー構築）
+│   ├── models.py           # v2 データモデル (S1)
+│   ├── scanner.py          # v2 YAMLスキャナ (S2)
+│   ├── parser.py           # v2 パーサー (S2)
+│   ├── resolver.py         # v2 名前解決 (S3)
+│   ├── top_tree.py         # v2 トップツリー検出 (S4)
+│   └── tree_builder.py     # v2 ツリー構築 (S5)
 ├── gui/
-│   └── main_window.py      # PySide6 メインウィンドウ
+│   ├── main_window.py      # v1 プロトタイプ メインウィンドウ
+│   ├── app.py              # v2 メインウィンドウ（3ペイン構成） (S6)
+│   ├── tree_model.py       # v2 TreeNode → QStandardItemModel 変換 (S6)
+│   └── detail_pane.py      # v2 詳細ペインのテキスト生成 (S6)
 ├── tests/                  # テストコード
 ├── docs/
 │   ├── design/             # 設計ドキュメント
