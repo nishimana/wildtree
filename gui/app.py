@@ -72,6 +72,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from core.editor import EditResult, toggle_comment
 from core.models import FullPathIndex, KeyRegistry, TreeNode
 from core.top_tree import TopTreeInfo
 
@@ -141,6 +142,7 @@ class WildTreeWindow(QMainWindow):
         self._full_path_index: FullPathIndex | None = None
         self._top_trees: list[TopTreeInfo] = []
         self._current_tree: TreeNode | None = None
+        self._is_populating: bool = False
 
         # UI 構築
         self._setup_ui()
@@ -243,6 +245,7 @@ class WildTreeWindow(QMainWindow):
         self._tree_view.selectionModel().currentChanged.connect(
             self._on_tree_node_selected
         )
+        self._tree_model.itemChanged.connect(self._on_item_changed)
 
     def _on_browse(self) -> None:
         """Browse ボタンのクリックハンドラ。
@@ -349,6 +352,7 @@ class WildTreeWindow(QMainWindow):
           1. 現在の選択アイテムから TopTreeInfo を取得
           2. build_tree(top.key_def, registry, full_path_index) でツリー構築
           3. populate_model(tree_node, _tree_model) でモデル更新
+             （_is_populating ガードで itemChanged シグナルを無視）
           4. ルートノードを展開
           5. _current_tree を更新
           6. _detail_browser をプレースホルダに戻す
@@ -379,8 +383,12 @@ class WildTreeWindow(QMainWindow):
             top_info.key_def, self._registry, self._full_path_index
         )
 
-        # モデルに投入
-        populate_model(tree_node, self._tree_model)
+        # モデルに投入（_is_populating ガードで itemChanged を無視）
+        self._is_populating = True
+        try:
+            populate_model(tree_node, self._tree_model)
+        finally:
+            self._is_populating = False
 
         # ルートノードを展開
         root_index = self._tree_model.index(0, 0)
@@ -425,3 +433,226 @@ class WildTreeWindow(QMainWindow):
         # 詳細テキストを生成して表示
         detail_text = format_node_detail(node)
         self._detail_browser.setPlainText(detail_text)
+
+    def _on_item_changed(self, item) -> None:
+        """チェックボックス操作のハンドラ。
+
+        itemChanged シグナルから呼ばれる。チェック操作を検知し、
+        toggle_comment → ツリー再構築 → 選択位置復元 のパイプラインを実行する。
+
+        Args:
+            item: 変更された QStandardItem。
+        """
+        from gui.tree_model import TREE_NODE_ROLE
+
+        # populate_model 中は無視（無限ループ防止）
+        if self._is_populating:
+            return
+
+        try:
+            # TreeNode を取得
+            node = item.data(TREE_NODE_ROLE)
+            if node is None:
+                return
+
+            # value_entry がなければチェック対象外
+            if node.value_entry is None:
+                return
+
+            # 親ノードの key_def から file_path を取得
+            parent_item = item.parent()
+            if parent_item is None:
+                # ルート直下の子の場合、parent() は None を返す（Qt の仕様）
+                # model.item(0) でルートの QStandardItem を取得
+                parent_item = self._tree_model.item(0)
+            if parent_item is None:
+                return
+
+            parent_node = parent_item.data(TREE_NODE_ROLE)
+            if parent_node is None or parent_node.key_def is None:
+                return
+
+            file_path = parent_node.key_def.file_path
+
+            # チェック状態の判定
+            enable = item.checkState() == Qt.CheckState.Checked
+
+            # 選択位置を保存
+            saved_path = self._save_selected_path()
+
+            # toggle_comment を呼び出し
+            result = toggle_comment(file_path, node.value_entry, enable)
+            if not result.success:
+                # エラー時は QMessageBox で通知し、ツリーを再構築してチェック状態を復元
+                QMessageBox.warning(
+                    self,
+                    "編集エラー",
+                    f"コメント切り替えに失敗しました:\n{result.error}",
+                )
+                self._rebuild_tree()
+                return
+
+            # 変更されたファイルのレジストリを更新
+            from core.editor import refresh_registry
+            if self._registry is not None:
+                refresh_registry(file_path, self._registry)
+
+            # ツリー再構築
+            self._rebuild_tree()
+
+            # 選択位置を復元
+            self._restore_selected_path(saved_path)
+
+        except Exception as e:
+            # 予期しない例外も QMessageBox で通知
+            QMessageBox.warning(
+                self,
+                "エラー",
+                f"チェック操作中にエラーが発生しました:\n{e}",
+            )
+
+    def _rebuild_tree(self) -> None:
+        """ツリーを再構築する。
+
+        build_full_path_index → build_tree → populate_model のパイプラインを実行する。
+        refresh_registry は呼び出し元（_on_item_changed）が事前に呼ぶ。
+        """
+        from core.resolver import build_full_path_index
+        from core.tree_builder import build_tree
+
+        from gui.tree_model import populate_model
+
+        # レジストリ / カードディレクトリが未構築の場合は何もしない
+        if self._registry is None or self._cards_dir is None:
+            return
+        if self._full_path_index is None:
+            return
+
+        # 現在のトップツリー情報を取得
+        current_item = self._list_top_trees.currentItem()
+        if current_item is None:
+            return
+
+        top_info: TopTreeInfo = current_item.data(TOP_TREE_DATA_ROLE)
+        if top_info is None:
+            return
+
+        # フルパスインデックスを再構築
+        self._full_path_index = build_full_path_index(
+            self._registry, self._cards_dir
+        )
+
+        # ツリーを再構築
+        tree_node = build_tree(
+            top_info.key_def, self._registry, self._full_path_index
+        )
+
+        # モデルに投入（_is_populating ガードで itemChanged を無視）
+        self._is_populating = True
+        try:
+            populate_model(tree_node, self._tree_model)
+        finally:
+            self._is_populating = False
+
+        # ルートノードを展開
+        root_index = self._tree_model.index(0, 0)
+        self._tree_view.expand(root_index)
+
+        # 状態を更新
+        self._current_tree = tree_node
+
+    def _save_selected_path(self) -> list[str]:
+        """現在選択中のノードのパス（ルートからの名前リスト）を保存する。
+
+        Returns:
+            ルートからのノード名のリスト。選択なしの場合は空リスト。
+        """
+        from gui.tree_model import TREE_NODE_ROLE
+
+        current_index = self._tree_view.selectionModel().currentIndex()
+        if not current_index.isValid():
+            return []
+
+        # 現在のインデックスからルートまでのパスを構築
+        path: list[str] = []
+        index = current_index
+        while index.isValid():
+            node = index.data(TREE_NODE_ROLE)
+            if node is not None:
+                path.append(node.display_name)
+            else:
+                path.append(index.data())
+            index = index.parent()
+
+        # ルートから葉の順に反転
+        path.reverse()
+        return path
+
+    def _restore_selected_path(self, path: list[str]) -> None:
+        """保存されたパスに一致するノードを選択する。
+
+        パスが一致するノードが見つからない場合はルートノードを選択する。
+
+        Args:
+            path: ルートからのノード名のリスト。
+        """
+        from gui.tree_model import TREE_NODE_ROLE
+
+        # ルートアイテムがない場合は何もしない
+        if self._tree_model.rowCount() == 0:
+            return
+
+        root_index = self._tree_model.index(0, 0)
+
+        # パスが空の場合はルートノードを選択
+        if not path:
+            self._tree_view.selectionModel().setCurrentIndex(
+                root_index,
+                self._tree_view.selectionModel().SelectionFlag.ClearAndSelect,
+            )
+            return
+
+        # パスを辿ってノードを探す
+        current_index = root_index
+        root_node = root_index.data(TREE_NODE_ROLE)
+
+        # ルート名が一致するか確認
+        if root_node is None or root_node.display_name != path[0]:
+            # ルート名が一致しない場合はルートノードを選択
+            self._tree_view.selectionModel().setCurrentIndex(
+                root_index,
+                self._tree_view.selectionModel().SelectionFlag.ClearAndSelect,
+            )
+            return
+
+        # パスの残りを辿る
+        for i in range(1, len(path)):
+            target_name = path[i]
+            found = False
+            model = self._tree_model
+            # 現在のインデックスの子を探す
+            parent_item = model.itemFromIndex(current_index)
+            if parent_item is None:
+                break
+            for row in range(parent_item.rowCount()):
+                child_item = parent_item.child(row)
+                if child_item is None:
+                    continue
+                child_node = child_item.data(TREE_NODE_ROLE)
+                if child_node is not None and child_node.display_name == target_name:
+                    current_index = child_item.index()
+                    found = True
+                    break
+            if not found:
+                # 一致するノードが見つからない場合はルートノードを選択
+                self._tree_view.selectionModel().setCurrentIndex(
+                    root_index,
+                    self._tree_view.selectionModel().SelectionFlag.ClearAndSelect,
+                )
+                return
+
+        # パスの末端に到達 → 選択
+        self._tree_view.selectionModel().setCurrentIndex(
+            current_index,
+            self._tree_view.selectionModel().SelectionFlag.ClearAndSelect,
+        )

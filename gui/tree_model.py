@@ -173,6 +173,16 @@ def _create_item(node: TreeNode) -> QStandardItem:
     # --- データ格納 ---
     item.setData(node, TREE_NODE_ROLE)
 
+    # --- チェックボックスの設定 (S8) ---
+    # value_entry を持つノードのみチェック可能にする
+    if node.value_entry is not None:
+        item.setCheckable(True)
+        # is_commented=False → Checked（有効）、True → Unchecked（無効）
+        if node.value_entry.is_commented:
+            item.setCheckState(Qt.CheckState.Unchecked)
+        else:
+            item.setCheckState(Qt.CheckState.Checked)
+
     # --- 編集不可 ---
     item.setEditable(False)
 
