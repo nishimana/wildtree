@@ -26,7 +26,8 @@ wildtree/
 │   ├── parser.py           # v2 パーサー (S2)
 │   ├── resolver.py         # v2 名前解決 (S3)
 │   ├── top_tree.py         # v2 トップツリー検出 (S4)
-│   └── tree_builder.py     # v2 ツリー構築 (S5)
+│   ├── tree_builder.py     # v2 ツリー構築 (S5)
+│   └── editor.py           # v2 YAMLエディタ (S7)
 ├── gui/
 │   ├── main_window.py      # v1 プロトタイプ メインウィンドウ
 │   ├── app.py              # v2 メインウィンドウ（3ペイン構成） (S6)
