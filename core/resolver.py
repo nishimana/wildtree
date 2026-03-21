@@ -99,6 +99,12 @@ def refresh_full_path_index(
     インデックスのキー（フルパス文字列）は変わらない。
     値（KeyDefinition オブジェクト）のみが更新される。
 
+    前提条件:
+        file_path は scan_yaml_files → parse_yaml_file パイプラインで使われた
+        Path オブジェクトと同一または同等の文字列表現を持つこと。
+        Path.__eq__ で比較するため、resolve() や absolute() で
+        正規化されたパスを渡すと一致しない可能性がある。
+
     Args:
         file_path: 変更されたファイルのパス。
         registry: 更新済みのキーレジストリ。
@@ -113,13 +119,12 @@ def refresh_full_path_index(
 
     parent = relative.parent
 
-    target_path = file_path.resolve()
-
     # registry から該当ファイルの新しい KeyDefinition を取得し、
     # フルパスを計算してインデックスを上書き
+    # Path.__eq__ による比較（Path.resolve() は Windows + OneDrive 環境で高コスト）
     for key_defs in registry.values():
         for kd in key_defs:
-            if kd.file_path.resolve() == target_path:
+            if kd.file_path == file_path:
                 if parent == Path("."):
                     fp = kd.name
                 else:

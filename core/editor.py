@@ -431,15 +431,14 @@ def refresh_registry(file_path: Path, registry: KeyRegistry) -> None:
     from core.parser import parse_yaml_file
 
     # 1. レジストリ内の全キーを走査し、file_path に一致する KeyDefinition を除去
-    # file_path の正規化（比較のため resolve する）
-    target_path = file_path.resolve()
+    # Path.__eq__ による比較（Path.resolve() は Windows + OneDrive 環境で高コスト）
     empty_keys: list[str] = []
 
     for key_name, key_defs in registry.items():
         # file_path が一致する KeyDefinition を除外
         registry[key_name] = [
             kd for kd in key_defs
-            if kd.file_path.resolve() != target_path
+            if kd.file_path != file_path
         ]
         # 空になったキーを記録
         if not registry[key_name]:

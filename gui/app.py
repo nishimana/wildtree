@@ -433,12 +433,15 @@ class WildTreeWindow(QMainWindow):
 
         t_total = time.perf_counter() - t_start
 
-        # パフォーマンスログ出力
-        print(f'[perf] _on_top_tree_selected("{top_info.name}"):')
-        print(f"[perf]   build_tree:      {t_build:.3f}s ({node_count} nodes)")
-        print(f"[perf]   populate_model:  {t_populate:.3f}s")
-        print(f"[perf]   expand_root:     {t_expand:.3f}s")
-        print(f"[perf]   total:           {t_total:.3f}s")
+        # パフォーマンスログ出力（cp932 非対応文字を含む場合に備える）
+        try:
+            print(f'[perf] _on_top_tree_selected("{top_info.name}"):')
+            print(f"[perf]   build_tree:      {t_build:.3f}s ({node_count} nodes)")
+            print(f"[perf]   populate_model:  {t_populate:.3f}s")
+            print(f"[perf]   expand_root:     {t_expand:.3f}s")
+            print(f"[perf]   total:           {t_total:.3f}s")
+        except (UnicodeEncodeError, OSError):
+            pass
 
         # 状態を更新
         self._current_tree = tree_node
